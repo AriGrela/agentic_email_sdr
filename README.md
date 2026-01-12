@@ -1,5 +1,10 @@
 # Agentic Email SDR System
 
+![Python](https://img.shields.io/badge/python-3.8%2B-blue)
+![License](https://img.shields.io/github/license/AriGrela/agentic_email_sdr)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104%2B-green)
+![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-orange)
+
 Sistema multi-agente para SDR (Sales Development Representative) por email que clasifica intenciones, delega a agentes especializados y mantiene memoria conversacional.
 
 ## 🎯 Características
@@ -45,7 +50,7 @@ Sistema multi-agente para SDR (Sales Development Representative) por email que c
 
 1. **Clonar el repositorio**
 ```bash
-git clone https://github.com/tu-usuario/agentic_email_sdr.git
+git clone https://github.com/AriGrela/agentic_email_sdr.git
 cd agentic_email_sdr
 ```
 
@@ -106,14 +111,77 @@ response = requests.post(
 print(response.json())
 ```
 
-### Respuesta del sistema
+### Ejemplo de Salida Real
 
-El sistema:
-1. Clasifica la intención del mensaje
-2. Delega al agente apropiado (PricingAgent si es "pricing", SDRAgent en otros casos)
-3. Genera una respuesta usando OpenAI
-4. Envía el email automáticamente
-5. Guarda la conversación en memoria
+Cuando envías un email, verás en la consola:
+
+```
+--- NUEVO MENSAJE ---
+From: cliente@ejemplo.com
+Message: ¿Cuánto cuesta el plan básico?
+[SDR] Intención detectada: pricing
+[SDR] Handoff → PricingAgent
+[RESPUESTA GENERADA POR] PricingAgent
+```
+
+Y la respuesta JSON:
+
+```json
+{
+  "status": "ok",
+  "agent": "PricingAgent",
+  "intent": "pricing",
+  "email_sent": true
+}
+```
+
+### Probar Diferentes Intents
+
+**1. Pricing Intent:**
+```bash
+curl -X POST "http://localhost:8000/inbound" \
+  -d "text=¿Cuánto cuesta?&from_email=cliente1@ejemplo.com"
+```
+
+**2. Product Info Intent:**
+```bash
+curl -X POST "http://localhost:8000/inbound" \
+  -d "text=¿Qué características tiene el producto?&from_email=cliente2@ejemplo.com"
+```
+
+**3. General Interest:**
+```bash
+curl -X POST "http://localhost:8000/inbound" \
+  -d "text=Hola, me interesa saber más&from_email=cliente3@ejemplo.com"
+```
+
+### Ver los Logs
+
+El sistema usa logging estructurado. Para ver todos los logs en detalle:
+
+```bash
+# Los logs aparecen automáticamente en la consola cuando ejecutas:
+uvicorn app.main:app --reload
+
+# Para guardar logs en un archivo:
+uvicorn app.main:app --reload 2>&1 | tee app.log
+```
+
+Los logs incluyen:
+- Mensajes entrantes
+- Intenciones detectadas
+- Agente que responde
+- Estado de envío de emails
+- Errores (si ocurren)
+
+### Flujo del Sistema
+
+El sistema ejecuta automáticamente:
+1. **Clasificación**: Detecta la intención del mensaje
+2. **Delegación**: Enruta al agente apropiado (PricingAgent o SDRAgent)
+3. **Generación**: Crea una respuesta contextual usando OpenAI
+4. **Envío**: Envía el email automáticamente vía SendGrid
+5. **Memoria**: Guarda la conversación para contexto futuro
 
 ## 🔧 Estructura del Proyecto
 
@@ -138,7 +206,50 @@ agentic_email_sdr/
 
 ## 🧪 Testing
 
-Para probar el sistema localmente con ngrok:
+### Tests Unitarios
+
+El proyecto incluye tests básicos para validar la funcionalidad:
+
+```bash
+# Ejecutar todos los tests
+pytest
+
+# Ejecutar tests con cobertura
+pytest --cov=app tests/
+
+# Ejecutar tests específicos
+pytest tests/test_intent_classifier.py
+```
+
+### Testing Manual
+
+**Opción 1: Usar el script de ejemplo**
+
+```bash
+python example_usage.py
+```
+
+Este script prueba automáticamente:
+- Health check
+- Intención de pricing
+- Interés general
+- Memoria conversacional
+
+**Opción 2: Testing con curl**
+
+```bash
+# Test básico
+curl -X POST "http://localhost:8000/inbound" \
+  -d "text=Hola&from_email=test@ejemplo.com"
+
+# Test de pricing
+curl -X POST "http://localhost:8000/inbound" \
+  -d "text=¿Cuánto cuesta?&from_email=test@ejemplo.com"
+```
+
+### Testing con ngrok (Webhooks Reales)
+
+Para probar con webhooks reales de SendGrid:
 
 1. **Iniciar el servidor**
 ```bash
@@ -193,11 +304,20 @@ Las contribuciones son bienvenidas. Por favor:
 
 ### Endpoints
 
-- `POST /inbound` - Recibe emails entrantes (simulados)
-- `GET /` - Health check básico
-- `GET /health` - Health check detallado
+#### `POST /inbound`
 
-### Ejemplo de respuesta
+Recibe emails entrantes simulados y procesa la respuesta automática.
+
+**Form Parameters:**
+
+| Parámetro | Tipo | Requerido | Descripción | Ejemplo |
+|-----------|------|-----------|-------------|---------|
+| `text` | string | Sí | Contenido del email recibido | `"Hola, me interesa conocer los precios"` |
+| `from_email` | string | Sí | Email del remitente | `"cliente@ejemplo.com"` |
+| `sender` | string | No | Email del remitente (alternativo) | `"cliente@ejemplo.com"` |
+| `subject` | string | No | Asunto del email | `"Consulta de precios"` |
+
+**Response:**
 
 ```json
 {
@@ -207,3 +327,51 @@ Las contribuciones son bienvenidas. Por favor:
   "email_sent": true
 }
 ```
+
+**Campos de respuesta:**
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `status` | string | Estado de la operación (`"ok"` o error) |
+| `agent` | string | Agente que generó la respuesta (`"PricingAgent"` o `"SDRAgent"`) |
+| `intent` | string | Intención detectada (`"pricing"`, `"product_info"`, `"general_interest"`, `"not_interested"`) |
+| `email_sent` | boolean | Indica si el email se envió correctamente |
+
+**Códigos de estado HTTP:**
+
+- `200 OK` - Email procesado correctamente
+- `400 Bad Request` - Faltan parámetros requeridos
+- `500 Internal Server Error` - Error interno del servidor
+
+#### `GET /`
+
+Health check básico del servicio.
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "service": "Agentic Email SDR System",
+  "version": "1.0.0"
+}
+```
+
+#### `GET /health`
+
+Health check detallado del servicio.
+
+**Response:**
+
+```json
+{
+  "status": "healthy"
+}
+```
+
+### Documentación Interactiva
+
+FastAPI genera automáticamente documentación interactiva:
+
+- **Swagger UI**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
